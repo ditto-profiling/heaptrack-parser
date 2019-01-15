@@ -1,13 +1,16 @@
-import {Parser} from "../src/heaptrack-parser"
-import { createReadStream, fstat, readFileSync } from "fs";
+import {readFileSync} from 'fs';
+import {inflateSync, gunzipSync} from 'zlib';
+
+import {Parser} from '../src/heaptrack-parser'
 
 /**
- * Test
+ * Real data test.
  */
 describe('Test', () => {
   it('Real data test', () => {
-    const data: Buffer = readFileSync('./test//data/testdata.txt');
-    const fileLines: string[] = data.toString().split(/\r?\n/);
+    const compressedData: Buffer = readFileSync('./test/data/data_1.gz');
+    const fileText: Buffer = gunzipSync(compressedData);
+    const fileLines: string[] = fileText.toString().split(/\r?\n/);
     new Parser(fileLines);
   });
 })

@@ -908,20 +908,6 @@ export class Parser {
       }
     }
 
-    for (const row of topRows) {
-      if (row.symbol.symbol === 'cv::fastMalloc(unsigned long)') {
-        console.log(row);
-
-        var parent = row;
-        var child = parent.children.length ? parent.children[0] : null;
-        while (child) {
-          console.log(child);
-          parent = child;
-          child = parent.children.length ? parent.children[0] : null;
-        }
-      }
-    }
-
     this.setParents(topRows, null);
     return {topRows, callerCalleeResults};
   }
