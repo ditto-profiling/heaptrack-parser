@@ -1,5 +1,5 @@
 import {readFileSync} from 'fs';
-import {inflateSync, gunzipSync} from 'zlib';
+import {gunzipSync} from 'zlib';
 
 import {Parser} from '../src/heaptrack-parser'
 

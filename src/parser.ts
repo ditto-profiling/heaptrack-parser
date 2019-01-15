@@ -1,5 +1,6 @@
 import {BehaviorSubject, Observable} from 'rxjs';
-import {defaultConfig, Config} from './config'
+
+import {Config, defaultConfig} from './config';
 
 /**
  * A node for navigating through traces.
@@ -206,9 +207,12 @@ export class Parser {
   private topDownDataSubject = new BehaviorSubject<RowData[]|null>(null);
   private bottomDownDataSubject = new BehaviorSubject<RowData[]|null>(null);
 
-  private consumedChartData: Chart = {rows: [], labels: new Map<number, string>()};
-  private allocationsChartData: Chart = {rows: [], labels: new Map<number, string>()};
-  private temporaryChartData: Chart = {rows: [], labels: new Map<number, string>()};
+  private consumedChartData:
+      Chart = {rows: [], labels: new Map<number, string>()};
+  private allocationsChartData:
+      Chart = {rows: [], labels: new Map<number, string>()};
+  private temporaryChartData:
+      Chart = {rows: [], labels: new Map<number, string>()};
 
   private totalCost: TotalCost =
       {allocations: 0, allocated: 0, leaked: 0, peak: 0, temporary: 0};
@@ -248,9 +252,7 @@ export class Parser {
    * @param fileText The text of the file to parse.
    * @param config The configuration object.
    */
-  constructor(
-      fileText: string[],
-      private config: Config = defaultConfig) {
+  constructor(fileText: string[], private config: Config = defaultConfig) {
     // Prepare the observables.
     this.summary$ = this.summarySubject.asObservable();
     this.consumedChart$ = this.consumedChartSubject.asObservable();
@@ -302,12 +304,13 @@ export class Parser {
     const {topRows, callerCalleeResults} = this.mergeAllocations();
     const bottomDownData: RowData[] = topRows;
 
-    this.bottomDownDataSubject.next(bottomDownData); // emit bottom-down data
+    this.bottomDownDataSubject.next(bottomDownData);  // emit bottom-down data
     this.buildSizeHistogram();
-    this.topDownDataSubject.next(this.toTopDownData(topRows)); // emit top-down data
+    this.topDownDataSubject.next(
+        this.toTopDownData(topRows));  // emit top-down data
     this.writeCallerCalleeData(topRows, callerCalleeResults);
     this.prepareCharts();
-    this.parseFile(fileLines, ModeEnum.THIRD); // final parse (no callback)
+    this.parseFile(fileLines, ModeEnum.THIRD);  // final parse (no callback)
 
     // The chart data is ready.
     this.consumedChartSubject.next(this.consumedChartData);
@@ -321,10 +324,11 @@ export class Parser {
    * @param mode The mode (first, second, third).
    * @param callback The post-parsing callback.
    */
-  private parseFile(fileLines: FileLine[], mode: number, callback: () => void = () => {}):
-      void {
-    this.lastPeakCost = (mode != ModeEnum.FIRST) ? this.totalCost.peak : 0;
-    this.lastPeakTime = (mode != ModeEnum.FIRST) ? this.peakTime : 0;
+  private parseFile(
+      fileLines: FileLine[], mode: number,
+      callback: () => void = () => undefined): void {
+    this.lastPeakCost = (mode !== ModeEnum.FIRST) ? this.totalCost.peak : 0;
+    this.lastPeakTime = (mode !== ModeEnum.FIRST) ? this.peakTime : 0;
 
     for (const allocation of this.allocations) {
       allocation.allocations = 0;
@@ -342,9 +346,10 @@ export class Parser {
     const fileLinesSet: FileLine[][] = [];
 
     // Split the lines into chunks.
-    for (let i = 0, max = fileLines.length; i * this.config.chunkSize < max; ++i) {
-      fileLinesSet.push(
-          fileLines.slice(i * this.config.chunkSize, (i + 1) * this.config.chunkSize));
+    const max = fileLines.length;
+    for (let i = 0; i * this.config.chunkSize < max; ++i) {
+      fileLinesSet.push(fileLines.slice(
+          i * this.config.chunkSize, (i + 1) * this.config.chunkSize));
     }
 
     fileLinesSet.reverse();
@@ -362,20 +367,23 @@ export class Parser {
       fileLinesSet: FileLine[][], mode: number, callback: () => void) {
     const filesLines: FileLine[]|undefined = fileLinesSet.pop();
 
-    if (filesLines === undefined) throw new Error('Failed to parse file lines');
+    if (filesLines === undefined) {
+      throw new Error('Failed to parse file lines');
+    }
 
-    for (const fileLine of filesLines)
+    for (const fileLine of filesLines) {
       this.processLine(fileLine.line, fileLine.op, fileLine.args, mode);
+    }
 
     if (fileLinesSet.length) {
       this.config.chunkCallback(
           () => this.parseFileRecursively(fileLinesSet, mode, callback));
     } else {
-      if (mode == ModeEnum.FIRST)
+      if (mode === ModeEnum.FIRST) {
         this.totalTime = this.timestamp + 1;
-      else
+      } else {
         this.handleTimestamp(this.totalTime);
-
+      }
       callback();
     }
   }
@@ -392,7 +400,7 @@ export class Parser {
     switch (op) {
       // Version opcode
       case 'v': {
-        if (args.length != 1 && args.length != 2) {
+        if (args.length !== 1 && args.length !== 2) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode v');
         }
@@ -400,13 +408,13 @@ export class Parser {
         let fileVersion: number;
 
         const heaptrackVersion = parseInt(args[0], 16);
-        if (args.length < 2 && heaptrackVersion === 0x010200)
+        if (args.length < 2 && heaptrackVersion === 0x010200) {
           fileVersion = 1;
-
-        else
+        } else {
           fileVersion = parseInt(args[1], 16);
+        }
 
-        if (this.config.supportedFileVersions.indexOf(fileVersion) == -1) {
+        if (this.config.supportedFileVersions.indexOf(fileVersion) === -1) {
           throw new Error(
               `Heaptrack file version not supported: ${fileVersion}`);
         }
@@ -416,7 +424,7 @@ export class Parser {
 
       // Executable opcode
       case 'X': {
-        if (args.length != 1) {
+        if (args.length !== 1) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode X');
         }
@@ -428,13 +436,15 @@ export class Parser {
 
         this.executableFound = true;
 
-        if (mode != ModeEnum.FIRST) this.handleDebuggee(args[0]);
+        if (mode !== ModeEnum.FIRST) {
+          this.handleDebuggee(args[0]);
+        }
         break;
       }
 
       // System info opcode
       case 'I': {
-        if (args.length != 2) {
+        if (args.length !== 2) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode I');
         }
@@ -443,13 +453,15 @@ export class Parser {
 
       // String opcode
       case 's': {
-        if (mode != ModeEnum.FIRST) break;
+        if (mode !== ModeEnum.FIRST) {
+          break;
+        }
 
-        const string = line.substr(2);
-        this.strings.push(string);
+        const theString: string = line.substr(2);
+        this.strings.push(theString);
 
-        const newIndex = this.newStrings.indexOf(string);
-        const stopIndex = this.stopStrings.indexOf(string);
+        const newIndex = this.newStrings.indexOf(theString);
+        const stopIndex = this.stopStrings.indexOf(theString);
 
         if (newIndex > -1) {
           this.newStrIndices.push(this.strings.length);
@@ -464,9 +476,11 @@ export class Parser {
 
       // Trace opcode
       case 't': {
-        if (mode != ModeEnum.FIRST) break;
+        if (mode !== ModeEnum.FIRST) {
+          break;
+        }
 
-        if (args.length != 2) {
+        if (args.length !== 2) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode t');
         }
@@ -477,9 +491,13 @@ export class Parser {
 
         if (node.ipIndex !== null) {
           while (this.newIpIndices.indexOf(node.ipIndex) > -1) {
-            if (node.parentIndex === null) break;
+            if (node.parentIndex === null) {
+              break;
+            }
             node = this.findTrace(node.parentIndex);
-            if (node.ipIndex === null) break;
+            if (node.ipIndex === null) {
+              break;
+            }
           }
         }
 
@@ -489,7 +507,9 @@ export class Parser {
 
       // Instruction opcode
       case 'i': {
-        if (mode != ModeEnum.FIRST) break;
+        if (mode !== ModeEnum.FIRST) {
+          break;
+        }
 
         if (args.length < 2) {
           throw new Error(
@@ -504,13 +524,19 @@ export class Parser {
         };
 
         const readFrame = (frame: Frame, index: {i: number}): boolean => {
-          if (args.length <= index.i) return false;
+          if (args.length <= index.i) {
+            return false;
+          }
           frame.functionIndex = parseInt(args[index.i++], 16);
 
-          if (args.length <= index.i) return false;
+          if (args.length <= index.i) {
+            return false;
+          }
           frame.fileIndex = parseInt(args[index.i++], 16);
 
-          if (args.length <= index.i) return false;
+          if (args.length <= index.i) {
+            return false;
+          }
           frame.line = parseInt(args[index.i++], 16);
           return true;
         };
@@ -520,14 +546,17 @@ export class Parser {
         if (readFrame(ip.frame, index)) {
           const inlinedFrame:
               Frame = {functionIndex: null, fileIndex: null, line: null};
-          while (readFrame(inlinedFrame, index)) ip.inlined.push(inlinedFrame);
+          while (readFrame(inlinedFrame, index)) {
+            ip.inlined.push(inlinedFrame);
+          }
         }
 
         this.instructionPointers.push(ip);
 
         if (ip.frame.functionIndex !== null) {
-          if (this.newStrIndices.indexOf(ip.frame.functionIndex) > -1)
+          if (this.newStrIndices.indexOf(ip.frame.functionIndex) > -1) {
             this.newIpIndices.push(this.instructionPointers.length);
+          }
         }
 
         break;
@@ -535,23 +564,25 @@ export class Parser {
 
       // Allocation opcode
       case '+': {
-        if (args.length != 1) {
+        if (args.length !== 1) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode +');
         }
 
         const allocationIndex: number = parseInt(args[0], 16);
 
-        if (allocationIndex > this.allocationInfos.length)
+        if (allocationIndex > this.allocationInfos.length) {
           throw new Error(
               'Failed to parse heaptrack file: allocation index out of bounds');
+        }
 
         const info: AllocationInfo = this.allocationInfos[allocationIndex];
         this.lastAllocationPtr = allocationIndex;
 
-        if (mode != ModeEnum.FIRST) {
-          if (info.allocationIndex === null)
+        if (mode !== ModeEnum.FIRST) {
+          if (info.allocationIndex === null) {
             throw new Error('Failed to find allocation by null index');
+          }
 
           const allocation: Allocation = this.allocations[info.allocationIndex];
           allocation.leaked += info.size;
@@ -566,9 +597,9 @@ export class Parser {
           this.totalCost.peak = this.totalCost.leaked;
           this.peakTime = this.timestamp;
 
-          if (mode == ModeEnum.SECOND &&
-              this.totalCost.peak == this.lastPeakCost &&
-              this.peakTime == this.lastPeakTime) {
+          if (mode === ModeEnum.SECOND &&
+              this.totalCost.peak === this.lastPeakCost &&
+              this.peakTime === this.lastPeakTime) {
             this.allocations.forEach(
                 allocation => allocation.peak = allocation.leaked);
           }
@@ -579,26 +610,31 @@ export class Parser {
 
       // Deallocation opcode
       case '-': {
-        if (args.length != 1) {
+        if (args.length !== 1) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode -');
         }
 
         const allocationInfoIndex: number = parseInt(args[0], 16);
-        let temporary = (this.lastAllocationPtr == allocationInfoIndex);
+        let temporary = (this.lastAllocationPtr === allocationInfoIndex);
         this.lastAllocationPtr = 0;
 
         const info: AllocationInfo = this.allocationInfos[allocationInfoIndex];
         this.totalCost.leaked -= info.size;
 
-        if (temporary) ++this.totalCost.temporary;
+        if (temporary) {
+          ++this.totalCost.temporary;
+        }
 
-        if (mode != ModeEnum.FIRST) {
-          if (info.allocationIndex === null)
+        if (mode !== ModeEnum.FIRST) {
+          if (info.allocationIndex === null) {
             throw new Error('Failed to find allocation by null index');
+          }
           const allocation = this.allocations[info.allocationIndex];
           allocation.leaked -= info.size;
-          if (temporary) ++allocation.temporary;
+          if (temporary) {
+            ++allocation.temporary;
+          }
         }
 
         break;
@@ -606,9 +642,11 @@ export class Parser {
 
       // Allocation opcode
       case 'a': {
-        if (mode != ModeEnum.FIRST) break;
+        if (mode !== ModeEnum.FIRST) {
+          break;
+        }
 
-        if (args.length != 2) {
+        if (args.length !== 2) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode a');
         }
@@ -629,32 +667,36 @@ export class Parser {
 
       // Timestamp opcode
       case 'c': {
-        if (args.length != 1) {
+        if (args.length !== 1) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode c');
         }
 
         this.timestamp = parseInt(args[0], 16);
-        if (mode != ModeEnum.FIRST) this.handleTimestamp(this.timestamp);
+        if (mode !== ModeEnum.FIRST) {
+          this.handleTimestamp(this.timestamp);
+        }
         break;
       }
 
       // Timestamp opcode
       case 'R': {
-        if (args.length != 1) {
+        if (args.length !== 1) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode R');
         }
 
         const rss = parseInt(args[0], 16);
 
-        if (rss > this.peakRss) this.peakRss = rss;
+        if (rss > this.peakRss) {
+          this.peakRss = rss;
+        }
         break;
       }
 
       // Attached opcode
       case 'A': {
-        if (args.length != 0) {
+        if (args.length !== 0) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode A');
         }
@@ -666,9 +708,10 @@ export class Parser {
       }
 
       // Unknown opcode
-      default:
+      default: {
         throw new Error(
             `Failed to parse heaptrack file: unknown opcode '${op}'`);
+      }
     }
   }
 
@@ -682,7 +725,9 @@ export class Parser {
 
     if (traceIndex < this.maxAllocationIndex) {
       const mapIndex = this.traceIndexToAllocationIndex.get(traceIndex);
-      if (mapIndex) return mapIndex;
+      if (mapIndex) {
+        return mapIndex;
+      }
 
       allocationIndex = this.allocations.length;
       this.traceIndexToAllocationIndex.set(traceIndex, allocationIndex);
@@ -696,7 +741,7 @@ export class Parser {
       };
       this.allocations.push(allocation);
     } else if (
-        traceIndex == this.maxAllocationIndex && this.allocations.length) {
+        traceIndex === this.maxAllocationIndex && this.allocations.length) {
       if (this.allocations[this.allocations.length - 1].traceIndex !==
           traceIndex) {
         throw new Error(
@@ -727,9 +772,6 @@ export class Parser {
    * @return The trace node.
    */
   private findTrace(traceIndex: number): TraceNode {
-    if (traceIndex === null || traceIndex === undefined)
-      return {ipIndex: null, parentIndex: null};
-
     return this.traces[traceIndex - 1];
   }
 
@@ -756,8 +798,10 @@ export class Parser {
     for (const alloc of this.allocations) {
       const ip: number|null = this.findTrace(alloc.traceIndex).ipIndex;
 
-      if (ip === null)
+      if (ip === null) {
         throw new Error('Failed to find allocation trace with null index');
+      }
+
       let entry = merged.get(ip);
 
       if (!entry) {
@@ -771,9 +815,15 @@ export class Parser {
     }
 
     let mergedArray: [number, ChartMergeData][] = Array.from(merged);
-    this.prepareChart(mergedArray, this.consumedChartData, (obj: any) => obj.consumed, (obj: any, value: number) => obj.consumed = value);
-    this.prepareChart(mergedArray, this.allocationsChartData, (obj: any) => obj.allocations, (obj: any, value: number) => obj.allocations = value);
-    this.prepareChart(mergedArray, this.temporaryChartData, (obj: any) => obj.temporary, (obj: any, value: number) => obj.temporary = value);
+    this.prepareChart(
+        mergedArray, this.consumedChartData, (obj: any) => obj.consumed,
+        (obj: any, value: number) => obj.consumed = value);
+    this.prepareChart(
+        mergedArray, this.allocationsChartData, (obj: any) => obj.allocations,
+        (obj: any, value: number) => obj.allocations = value);
+    this.prepareChart(
+        mergedArray, this.temporaryChartData, (obj: any) => obj.temporary,
+        (obj: any, value: number) => obj.temporary = value);
   }
 
   /**
@@ -783,13 +833,16 @@ export class Parser {
    * @param propertyGetter A getter for the chart cost property.
    * @param propertySetter An setter for the chart cost property.
    */
-  private prepareChart(mergedArray: [number, ChartMergeData][], chart: Chart, propertyGetter: (obj: any) => number, 
-    propertySetter: (obj: any, value: number) => void): void {
+  private prepareChart(
+      mergedArray: [number, ChartMergeData][], chart: Chart,
+      propertyGetter: (obj: any) => number,
+      propertySetter: (obj: any, value: number) => void): void {
     mergedArray.sort((lhs, rhs) => {
       return propertyGetter(rhs[1]) - propertyGetter(lhs[1]);
     });
 
-    for (let i = 0; i < mergedArray.length && i < this.config.maxNumCost - 1; ++i) {
+    for (let i = 0; i < mergedArray.length && i < this.config.maxNumCost - 1;
+         ++i) {
       const ip: number = mergedArray[i][1].ip;
       let labelIds: LabelIds|undefined = this.labelIds.get(ip);
 
@@ -800,16 +853,16 @@ export class Parser {
 
       propertySetter(labelIds, i + 1);
       const instructionPointer: InstructionPointer|null = this.findIp(ip);
-      if (instructionPointer === null)
+      if (instructionPointer === null) {
         throw new Error('Failed to get instruction pointer');
+      }
       const frame: Frame = instructionPointer.frame;
 
-      if (frame !== null &&
-          frame.functionIndex !== null) {  // ATTN check this logic
+      if (frame.functionIndex !== null) {  // ATTN check this logic
         const functionName: string = frame.functionIndex < this.strings.length ?
             this.stringify(frame.functionIndex) :
             '';
-            chart.labels.set(i + 1, functionName);
+        chart.labels.set(i + 1, functionName);
       }
     }
   }
@@ -820,13 +873,16 @@ export class Parser {
    * @return The instruction pointer if one can be found, otherwise null.
    */
   private findIp(ipIndex: number): InstructionPointer|null {
-    if (ipIndex > this.instructionPointers.length) return null;
+    if (ipIndex > this.instructionPointers.length) {
+      return null;
+    }
     return this.instructionPointers[ipIndex - 1];
   }
 
   /**
    * Merge matching allocations.
-   * @return The top rows of the merged allocations and the caller-callee results.
+   * @return The top rows of the merged allocations and the caller-callee
+   * results.
    */
   private mergeAllocations():
       {topRows: RowData[], callerCalleeResults: CallerCalleeResults} {
@@ -879,10 +935,13 @@ export class Parser {
       while (traceIndex) {
         const trace: TraceNode = this.findTrace(traceIndex);
 
-        if (trace.ipIndex === null)
+        if (trace.ipIndex === null) {
           throw new Error('Failed to get trace IP index');
+        }
         const ip: InstructionPointer|null = this.findIp(trace.ipIndex);
-        if (ip === null) throw new Error('Failed to get instruction pointer');
+        if (ip === null) {
+          throw new Error('Failed to get instruction pointer');
+        }
 
         const location = this.strLocation(ip);
         rows = addRow(rows, location, allocation);
@@ -893,13 +952,18 @@ export class Parser {
           rows = addRow(rows, inlinedLocation, allocation);
         }
 
-        if (ip.frame.functionIndex === null)
+        if (ip.frame.functionIndex === null) {
           break;  // throw new Error('Failed to find frame function index');
                   // // ATTN check this logic
+        }
 
-        if (this.stopIndices.indexOf(ip.frame.functionIndex) > -1) break;
+        if (this.stopIndices.indexOf(ip.frame.functionIndex) > -1) {
+          break;
+        }
         traceIndex = trace.parentIndex;
-        if (traceIndex === null) break;
+        if (traceIndex === null) {
+          break;
+        }
         if (recursionGuard.indexOf(traceIndex) > -1) {
           console.warn('Trace recursion detected - corrupt data file?');
           break;
@@ -935,7 +999,9 @@ export class Parser {
       location: Location, cost: AllocationData, recursionGuard: Symbol[],
       callerCalleeResult: CallerCalleeResults): void {
     const index: number = recursionGuard.indexOf(location.symbol);
-    if (index > -1) return;
+    if (index > -1) {
+      return;
+    }
 
     let entry: CallerCalleeEntry|undefined =
         callerCalleeResult.entries.get(location.symbol);
@@ -954,13 +1020,14 @@ export class Parser {
 
     let locationCost: EntryCost|undefined;
 
-    if (location.fileLine === null)
+    if (location.fileLine === null) {
       return;  // throw new Error('Location file line was null'); // ATTN
                // check this logic
+    }
 
     locationCost = entry.sourceMap.get(location.fileLine);
 
-    if (locationCost === null || locationCost === undefined) {
+    if (locationCost === undefined) {
       locationCost = {
         inclusiveCost: {allocations: 0, temporary: 0, leaked: 0, peak: 0},
         selfCost: {allocations: 0, temporary: 0, leaked: 0, peak: 0}
@@ -991,9 +1058,15 @@ export class Parser {
    */
   private findFirstSymbol(rows: RowData[], symbol: Symbol): RowData|null {
     for (const row of rows) {
-      if (row.symbol.symbol !== symbol.symbol) continue;
-      if (row.symbol.path !== symbol.path) continue;
-      if (row.symbol.binary !== symbol.binary) continue;
+      if (row.symbol.symbol !== symbol.symbol) {
+        continue;
+      }
+      if (row.symbol.path !== symbol.path) {
+        continue;
+      }
+      if (row.symbol.binary !== symbol.binary) {
+        continue;
+      }
       return row;
     }
 
@@ -1015,8 +1088,9 @@ export class Parser {
    * @return The string if one exists, otherwise an empty string.
    */
   private stringify(index: number): string {
-    if (index == null || index == undefined || index > this.strings.length)
+    if (index < 1 || index > this.strings.length) {
       return '';
+    }
     return this.strings[index - 1];
   }
 
@@ -1045,11 +1119,13 @@ export class Parser {
    * Find a function name from a frame.
    * @param frame The frame.
    * @param moduleIndex The module index.
-   * @return The function name if there is one, otherwise '<unresolved function>'.
+   * @return The function name if there is one, otherwise '<unresolved
+   * function>'.
    */
   private strFunc(frame: Frame): string {
-    if (frame.functionIndex === null)
+    if (frame.functionIndex === null) {
       return '<unresolved function>';
+    }
 
     return this.stringify(frame.functionIndex);
   }
@@ -1067,7 +1143,9 @@ export class Parser {
   /**
    * Build an allocation size histogram.
    */
-  private buildSizeHistogram(): void {} // (TODO: write this function).
+  private buildSizeHistogram(): void {
+    return;  // (TODO: write this function).
+  }
 
   /**
    * Convert bottom-down row data to top-down row data.
@@ -1089,15 +1167,24 @@ export class Parser {
    */
   private allocationDataEquivalent(lhs: AllocationData, rhs: AllocationData):
       boolean {
-    if (lhs.allocations !== rhs.allocations) return false;
-    if (lhs.leaked !== rhs.leaked) return false;
-    if (lhs.temporary !== rhs.temporary) return false;
-    if (lhs.peak !== rhs.peak) return false;
+    if (lhs.allocations !== rhs.allocations) {
+      return false;
+    }
+    if (lhs.leaked !== rhs.leaked) {
+      return false;
+    }
+    if (lhs.temporary !== rhs.temporary) {
+      return false;
+    }
+    if (lhs.peak !== rhs.peak) {
+      return false;
+    }
     return true;
   }
 
   /**
-   * Produce an allocation data object that is the fieldwise sum of two such objects.
+   * Produce an allocation data object that is the fieldwise sum of two such
+   * objects.
    * @param lhs The LHS allocation data.
    * @param rhs The RHS allocation data.
    * @return The combined allocation data.
@@ -1113,7 +1200,8 @@ export class Parser {
   }
 
   /**
-   * Produce an allocation data object that is the fieldwise difference of two such objects.
+   * Produce an allocation data object that is the fieldwise difference of two
+   * such objects.
    * @param lhs The LHS allocation data.
    * @param rhs The RHS allocation data.
    * @return The subtracted allocation data.
@@ -1179,22 +1267,28 @@ export class Parser {
    * @param callerCalleeResults The caller-callee results.
    */
   private writeCallerCalleeData(
-      topRows: RowData[], callerCalleeResults: CallerCalleeResults): void {} // TODO: write this function
+      topRows: RowData[], callerCalleeResults: CallerCalleeResults): void {
+    return;  // TODO: write this function
+  }
 
   /**
    * Callback for handling timestamp data.
    * @param timestamp The timestamp value.
    */
   private handleTimestamp(timestamp: number): void {
-    if (!this.buildCharts) return;
+    if (!this.buildCharts) {
+      return;
+    }
 
     this.maxConsumedSinceLastTimeStamp =
         Math.max(this.maxConsumedSinceLastTimeStamp, this.totalCost.leaked);
 
-    const diffBetweenTimeStamps: number = this.totalTime / this.config.maxDataPoints;
+    const diffBetweenTimeStamps: number =
+        this.totalTime / this.config.maxDataPoints;
     if (timestamp !== this.totalTime &&
-        timestamp - this.lastTimestamp < diffBetweenTimeStamps)
+        timestamp - this.lastTimestamp < diffBetweenTimeStamps) {
       return;
+    }
 
     const nowConsumed: number = this.maxConsumedSinceLastTimeStamp;
     this.maxConsumedSinceLastTimeStamp = 0;
@@ -1206,7 +1300,9 @@ export class Parser {
         cost: new Array(this.config.maxNumCost)
       };
       row.cost[0] = totalCost;
-      for (let i = 1; i < row.cost.length; ++i) row.cost[i] = 0;
+      for (let i = 1; i < row.cost.length; ++i) {
+        row.cost[i] = 0;
+      }
       return row;
     };
 
@@ -1215,17 +1311,22 @@ export class Parser {
     const temporary: ChartRow = createRow(timestamp, this.totalCost.temporary);
 
     const addDataToRow = (cost: number, labelId: number, rows: ChartRow) => {
-      if (!cost || labelId === -1 || labelId >= this.config.maxNumCost) return;
+      if (!cost || labelId === -1 || labelId >= this.config.maxNumCost) {
+        return;
+      }
       rows.cost[labelId] += cost;
     };
 
     for (const alloc of this.allocations) {
       const ip: number|null = this.findTrace(alloc.traceIndex).ipIndex;
 
-      if (ip === null)
+      if (ip === null) {
         throw new Error('Allocation instruction pointer was null');
+      }
       const labels = this.labelIds.get(ip);
-      if (!labels) continue;
+      if (!labels) {
+        continue;
+      }
 
       addDataToRow(alloc.leaked, labels.consumed, consumed);
       addDataToRow(alloc.allocations, labels.allocations, allocs);
@@ -1246,10 +1347,11 @@ export class Parser {
     this.maxConsumedSinceLastTimeStamp =
         Math.max(this.maxConsumedSinceLastTimeStamp, this.totalCost.leaked);
 
-    if (index === this.allocationInfoCounter.length)
+    if (index === this.allocationInfoCounter.length) {
       this.allocationInfoCounter.push({info: info, allocations: 1});
-    else
+    } else {
       ++this.allocationInfoCounter[index].allocations;
+    }
   }
 
   /**
