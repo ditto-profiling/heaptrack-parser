@@ -1,14 +1,13 @@
-import DummyClass from "../src/heaptrack-parser"
+import {Parser} from "../src/heaptrack-parser"
+import { createReadStream, fstat, readFileSync } from "fs";
 
 /**
- * Dummy test
+ * Test
  */
-describe("Dummy test", () => {
-  it("works if true is truthy", () => {
-    expect(true).toBeTruthy()
-  })
-
-  it("DummyClass is instantiable", () => {
-    expect(new DummyClass()).toBeInstanceOf(DummyClass)
-  })
+describe('Test', () => {
+  it('Real data test', () => {
+    const data: Buffer = readFileSync('./test//data/testdata.txt');
+    const fileLines: string[] = data.toString().split(/\r?\n/);
+    new Parser(fileLines);
+  });
 })
