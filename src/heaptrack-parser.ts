@@ -7,3 +7,4 @@ import 'ts-polyfill/lib/es2017-object';
 import 'ts-polyfill/lib/es2018-promise';
 
 export {Parser} from './parser'
+export {Config, defaultConfig} from './config'
