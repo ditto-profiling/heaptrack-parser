@@ -40,7 +40,7 @@ interface AllocationInfo {
 /**
  * Memory allocation cost data.
  */
-interface AllocationData {
+export interface AllocationData {
   allocations: number;
   temporary: number;
   leaked: number;
