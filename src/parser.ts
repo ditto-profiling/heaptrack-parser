@@ -190,6 +190,15 @@ interface CountedAllocationInfo {
 }
 
 /**
+ * Flame graph info.
+ */
+export interface FlameGraph {
+  topDownData: RowData[];
+  bottomDownData: RowData[];
+  summaryData: SummaryData;
+}
+
+/**
  * The parser object.
  */
 export class Parser {
@@ -199,6 +208,7 @@ export class Parser {
   public temporaryChart$: Observable<Chart|null>;
   public topDownData$: Observable<RowData[]|null>;
   public bottomDownData$: Observable<RowData[]|null>;
+  public flameGraph$: Observable<FlameGraph|null>;
 
   private summarySubject = new BehaviorSubject<SummaryData|null>(null);
   private consumedChartSubject = new BehaviorSubject<Chart|null>(null);
@@ -206,6 +216,7 @@ export class Parser {
   private temporaryChartSubject = new BehaviorSubject<Chart|null>(null);
   private topDownDataSubject = new BehaviorSubject<RowData[]|null>(null);
   private bottomDownDataSubject = new BehaviorSubject<RowData[]|null>(null);
+  private flameGraphSubject = new BehaviorSubject<FlameGraph|null>(null);
 
   private consumedChartData:
       Chart = {rows: [], labels: new Map<number, string>()};
@@ -249,10 +260,9 @@ export class Parser {
 
   /**
    * Constructor.
-   * @param fileText The text of the file to parse.
    * @param config The configuration object.
    */
-  constructor(fileText: string[], private config: Config = defaultConfig) {
+  constructor(private config: Config = defaultConfig) {
     // Prepare the observables.
     this.summary$ = this.summarySubject.asObservable();
     this.consumedChart$ = this.consumedChartSubject.asObservable();
@@ -260,7 +270,14 @@ export class Parser {
     this.temporaryChart$ = this.temporaryChartSubject.asObservable();
     this.topDownData$ = this.topDownDataSubject.asObservable();
     this.bottomDownData$ = this.bottomDownDataSubject.asObservable();
+    this.flameGraph$ = this.flameGraphSubject.asObservable();
+  }
 
+  /**
+   * Parse the text.
+   * @param fileText The text of the file to parse.
+   */
+  public async parse(fileText: string[]) {
     // Parse the file lines.
     const fileLines: FileLine[] = [];
     for (const line of fileText) {
@@ -269,9 +286,7 @@ export class Parser {
     }
 
     // Start with the first pass.
-    this.config.chunkCallback(
-        () => this.parseFile(
-            fileLines, ModeEnum.FIRST, () => this.secondPass(fileLines)));
+    this.parseFile(fileLines, ModeEnum.FIRST, () => this.secondPass(fileLines));
   }
 
   /**
@@ -306,8 +321,20 @@ export class Parser {
 
     this.bottomDownDataSubject.next(bottomDownData);  // emit bottom-down data
     this.buildSizeHistogram();
-    this.topDownDataSubject.next(
-        this.toTopDownData(topRows));  // emit top-down data
+    const topDownData: RowData[] = this.toTopDownData(topRows);
+    this.topDownDataSubject.next(topDownData);  // emit top-down data
+
+    // Emit flame graph data
+    const summaryData: SummaryData|null = this.summarySubject.getValue();
+
+    if (summaryData !== null) {
+      this.flameGraphSubject.next({
+        topDownData: topDownData,
+        bottomDownData: bottomDownData,
+        summaryData: summaryData
+      });
+    }
+    
     this.writeCallerCalleeData(topRows, callerCalleeResults);
     this.prepareCharts();
     this.parseFile(fileLines, ModeEnum.THIRD);  // final parse (no callback)
@@ -353,8 +380,7 @@ export class Parser {
     }
 
     fileLinesSet.reverse();
-    this.config.chunkCallback(
-        () => this.parseFileRecursively(fileLinesSet, mode, callback));
+    this.parseFileRecursively(fileLinesSet, mode, callback);
   }
 
   /**
@@ -376,8 +402,7 @@ export class Parser {
     }
 
     if (fileLinesSet.length) {
-      this.config.chunkCallback(
-          () => this.parseFileRecursively(fileLinesSet, mode, callback));
+      this.parseFileRecursively(fileLinesSet, mode, callback);
     } else {
       if (mode === ModeEnum.FIRST) {
         this.totalTime = this.timestamp + 1;
@@ -437,7 +462,7 @@ export class Parser {
         this.executableFound = true;
 
         if (mode !== ModeEnum.FIRST) {
-          this.handleDebuggee(line);
+          this.handleDebuggee(line.substr(2));
         }
         break;
       }

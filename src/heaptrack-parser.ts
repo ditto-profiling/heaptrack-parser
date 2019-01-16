@@ -6,5 +6,5 @@ import 'ts-polyfill/lib/es2017-string';
 import 'ts-polyfill/lib/es2017-object';
 import 'ts-polyfill/lib/es2018-promise';
 
-export {Parser, AllocationData, Chart, ChartRow, RowData, TotalCost, SummaryData} from './parser'
 export {Config, defaultConfig} from './config'
+export {AllocationData, Chart, ChartRow, Parser, RowData, SummaryData, TotalCost} from './parser'
