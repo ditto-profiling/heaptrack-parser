@@ -424,7 +424,7 @@ export class Parser {
 
       // Executable opcode
       case 'X': {
-        if (args.length !== 1) {
+        if (args.length < 1) {
           throw new Error(
               'Failed to parse heaptrack file: unexpected number of arguments to opcode X');
         }
@@ -437,7 +437,7 @@ export class Parser {
         this.executableFound = true;
 
         if (mode !== ModeEnum.FIRST) {
-          this.handleDebuggee(args[0]);
+          this.handleDebuggee(line);
         }
         break;
       }
