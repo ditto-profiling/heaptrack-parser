@@ -81,13 +81,13 @@ export interface SummaryData extends TotalCost {
  */
 export interface Chart {
   rows: ChartRow[];
-  labels: Map<number, string>;
+  labels: string[];
 }
 
 /**
  * Parser mode of operation.
  */
-const ModeEnum = {
+export const ModeEnum = {
   FIRST: 0,
   SECOND: 1,
   THIRD: 2
@@ -239,12 +239,9 @@ export class Parser {
   private bottomDownDataSubject = new BehaviorSubject<RowData[]|null>(null);
   private flameGraphSubject = new BehaviorSubject<FlameGraph|null>(null);
 
-  private consumedChartData:
-      Chart = {rows: [], labels: new Map<number, string>()};
-  private allocationsChartData:
-      Chart = {rows: [], labels: new Map<number, string>()};
-  private temporaryChartData:
-      Chart = {rows: [], labels: new Map<number, string>()};
+  private consumedChartData: Chart;
+  private allocationsChartData: Chart;
+  private temporaryChartData: Chart;
 
   private totalCost: TotalCost =
       {allocations: 0, allocated: 0, leaked: 0, peak: 0, temporary: 0};
@@ -290,6 +287,19 @@ export class Parser {
     this.topDownData$ = this.topDownDataSubject.asObservable();
     this.bottomDownData$ = this.bottomDownDataSubject.asObservable();
     this.flameGraph$ = this.flameGraphSubject.asObservable();
+
+    this.consumedChartData = {
+      rows: [],
+      labels: new Array<string>(this.config.maxNumCost).fill('')
+    };
+    this.allocationsChartData = {
+      rows: [],
+      labels: new Array<string>(this.config.maxNumCost).fill('')
+    };
+    this.temporaryChartData = {
+      rows: [],
+      labels: new Array<string>(this.config.maxNumCost).fill('')
+    };
   }
 
   /**
@@ -856,9 +866,9 @@ export class Parser {
     this.temporaryChartData.rows.push(
         {timestamp: 0, cost: new Array(this.config.maxNumCost).fill(0)});
 
-    this.consumedChartData.labels.set(0, 'total');
-    this.allocationsChartData.labels.set(0, 'total');
-    this.temporaryChartData.labels.set(0, 'total');
+    this.consumedChartData.labels[0] = 'total';
+    this.allocationsChartData.labels[0] = 'total';
+    this.temporaryChartData.labels[0] = 'total';
 
     this.maxConsumedSinceLastTimeStamp = 0;
     const merged = new Map<number, ChartMergeData>();
@@ -928,7 +938,7 @@ export class Parser {
 
       if (frame.functionIndex !== null) {  // ATTN check this logic
         const functionName: string = this.stringify(frame.functionIndex);
-        chart.labels.set(i + 1, functionName);
+        chart.labels[i + 1] = functionName;
       }
     }
   }

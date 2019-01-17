@@ -7,4 +7,4 @@ import 'ts-polyfill/lib/es2017-object';
 import 'ts-polyfill/lib/es2018-promise';
 
 export {Config, defaultConfig} from './config'
-export {AllocationData, Chart, ChartRow, ExportedData, FlameGraph, Parser, RowData, SummaryData, TotalCost} from './parser'
+export {AllocationData, Chart, ChartRow, ExportedData, FlameGraph, ModeEnum, Parser, RowData, SummaryData, TotalCost} from './parser'
