@@ -199,9 +199,30 @@ export interface FlameGraph {
 }
 
 /**
+ * Exported data.
+ */
+export interface ExportedData {
+  topDownData: RowData[]|null;
+  bottomDownData: RowData[]|null;
+  summaryData: SummaryData|null;
+  consumedChart: Chart|null;
+  allocationsChart: Chart|null;
+  temporaryChart: Chart|null;
+}
+
+/**
  * The parser object.
  */
 export class Parser {
+  private supportedFileVersions: number[] = [1, 2];
+  private newStrings: string[] = [
+    'operator new(unsigned long)', 'operator new[](unsigned long)',
+    'operator new(unsigned int)', 'operator new[](unsigned int)'
+  ];
+  private stopStrings: string[] = [
+    'main', '__libc_start_main', '__static_initialization_and_destruction_0'
+  ];
+
   public summary$: Observable<SummaryData|null>;
   public consumedChart$: Observable<Chart|null>;
   public allocationsChart$: Observable<Chart|null>;
@@ -242,8 +263,6 @@ export class Parser {
   private executableFound: boolean = false;
   private lastAllocationPtr: number = 0;
   private timestamp: number = 0;
-  private newStrings: string[] = this.config.newStrings;
-  private stopStrings: string[] = this.config.stopStrings;
 
   private lastPeakCost: number = 0;
   private lastPeakTime: number = 0;
@@ -285,59 +304,14 @@ export class Parser {
       fileLines.push({line: line, op: op, args: args})
     }
 
-    // Start with the first pass.
-    this.parseFile(fileLines, ModeEnum.FIRST, () => this.secondPass(fileLines));
-  }
+    this.parseFile(fileLines, ModeEnum.FIRST);
+    this.completeParse(ModeEnum.FIRST);
 
-  /**
-   * Perform the second pass.
-   * @param fileText The text of the file to parse.
-   */
-  private secondPass(fileLines: FileLine[]): void {
-    this.parseFile(fileLines, ModeEnum.SECOND, () => this.thirdPass(fileLines));
-  }
+    this.parseFile(fileLines, ModeEnum.SECOND);
+    this.completeParse(ModeEnum.SECOND);
 
-  /**
-   * Perform the third pass.
-   * @param fileText The text of the file to parse.
-   */
-  private thirdPass(fileLines: FileLine[]): void {
-    // The summary data is ready.
-    this.summarySubject.next({
-      debuggee: this.debuggee,
-      totalTime: this.totalTime,
-      fromAttached: this.fromAttached,
-      peakTime: this.peakTime,
-      peakRss: this.peakRss,
-      allocations: this.totalCost.allocations,
-      allocated: this.totalCost.allocated,
-      leaked: this.totalCost.leaked,
-      peak: this.totalCost.peak,
-      temporary: this.totalCost.temporary
-    });
-
-    const {topRows, callerCalleeResults} = this.mergeAllocations();
-    const bottomDownData: RowData[] = topRows;
-
-    this.bottomDownDataSubject.next(bottomDownData);  // emit bottom-down data
-    this.buildSizeHistogram();
-    const topDownData: RowData[] = this.toTopDownData(topRows);
-    this.topDownDataSubject.next(topDownData);  // emit top-down data
-
-    // Emit flame graph data
-    const summaryData: SummaryData|null = this.summarySubject.getValue();
-
-    if (summaryData !== null) {
-      this.flameGraphSubject.next({
-        topDownData: topDownData,
-        bottomDownData: bottomDownData,
-        summaryData: summaryData
-      });
-    }
-    
-    this.writeCallerCalleeData(topRows, callerCalleeResults);
-    this.prepareCharts();
-    this.parseFile(fileLines, ModeEnum.THIRD);  // final parse (no callback)
+    this.parseFile(fileLines, ModeEnum.THIRD);
+    this.completeParse(ModeEnum.THIRD);
 
     // The chart data is ready.
     this.consumedChartSubject.next(this.consumedChartData);
@@ -346,14 +320,111 @@ export class Parser {
   }
 
   /**
+   * Parse a single line.
+   * @param line The full line.
+   * @param mode The parse mode (first, second, third).
+   */
+  public parseLine(line: string, mode: number) {
+    if (mode !== ModeEnum.FIRST && mode !== ModeEnum.SECOND &&
+        mode !== ModeEnum.THIRD) {
+      throw new Error('Unknown mode');
+    }
+
+    const [op, ...args]: string[] = line.split(' ');
+    this.processLine(line, op, args, mode);
+  }
+
+  /**
+   * Complete the parse for a given mode.
+   * @param mode The parse mode (first, second, third).
+   */
+  public completeParse(mode: number) {
+    switch (mode) {
+      case ModeEnum.FIRST: {
+        break;
+      }
+
+      case ModeEnum.SECOND: {
+        // The summary data is ready.
+        this.summarySubject.next({
+          debuggee: this.debuggee,
+          totalTime: this.totalTime,
+          fromAttached: this.fromAttached,
+          peakTime: this.peakTime,
+          peakRss: this.peakRss,
+          allocations: this.totalCost.allocations,
+          allocated: this.totalCost.allocated,
+          leaked: this.totalCost.leaked,
+          peak: this.totalCost.peak,
+          temporary: this.totalCost.temporary
+        });
+
+        const {topRows, callerCalleeResults} = this.mergeAllocations();
+        const bottomDownData: RowData[] = topRows;
+
+        this.bottomDownDataSubject.next(
+            bottomDownData);  // emit bottom-down data
+        this.buildSizeHistogram();
+        const topDownData: RowData[] = this.toTopDownData(topRows);
+        this.topDownDataSubject.next(topDownData);  // emit top-down data
+
+        // Emit flame graph data
+        const summaryData: SummaryData|null = this.summarySubject.getValue();
+
+        if (summaryData !== null) {
+          this.flameGraphSubject.next({
+            topDownData: topDownData,
+            bottomDownData: bottomDownData,
+            summaryData: summaryData
+          });
+        }
+
+        this.writeCallerCalleeData(topRows, callerCalleeResults);
+        this.prepareCharts();
+        break;
+      }
+
+      case ModeEnum.THIRD: {
+        // The chart data is ready.
+        this.consumedChartSubject.next(this.consumedChartData);
+        this.allocationsChartSubject.next(this.allocationsChartData);
+        this.temporaryChartSubject.next(this.temporaryChartData);
+        break;
+      }
+      default: { throw new Error('Unknown mode'); }
+    }
+  }
+
+  /**
+   * Export the data.
+   * @return The exported data.
+   */
+  public export(): ExportedData {
+    const topDownData: RowData[]|null = this.topDownDataSubject.getValue();
+    const bottomDownData: RowData[]|null =
+        this.bottomDownDataSubject.getValue();
+    const summaryData: SummaryData|null = this.summarySubject.getValue();
+    const consumedChart: Chart|null = this.consumedChartSubject.getValue();
+    const allocationsChart: Chart|null =
+        this.allocationsChartSubject.getValue();
+    const temporaryChart: Chart|null = this.temporaryChartSubject.getValue();
+
+    return {
+      topDownData: topDownData,
+      bottomDownData: bottomDownData,
+      summaryData: summaryData,
+      consumedChart: consumedChart,
+      allocationsChart: allocationsChart,
+      temporaryChart: temporaryChart
+    };
+  }
+
+  /**
    * Parse the file.
    * @param fileText The text of the file to parse.
    * @param mode The mode (first, second, third).
-   * @param callback The post-parsing callback.
    */
-  private parseFile(
-      fileLines: FileLine[], mode: number,
-      callback: () => void = () => undefined): void {
+  private parseFile(fileLines: FileLine[], mode: number): void {
     this.lastPeakCost = (mode !== ModeEnum.FIRST) ? this.totalCost.peak : 0;
     this.lastPeakTime = (mode !== ModeEnum.FIRST) ? this.peakTime : 0;
 
@@ -370,46 +441,18 @@ export class Parser {
     this.peakRss = 0;
     this.executableFound = false;
 
-    const fileLinesSet: FileLine[][] = [];
-
-    // Split the lines into chunks.
-    const max = fileLines.length;
-    for (let i = 0; i * this.config.chunkSize < max; ++i) {
-      fileLinesSet.push(fileLines.slice(
-          i * this.config.chunkSize, (i + 1) * this.config.chunkSize));
-    }
-
-    fileLinesSet.reverse();
-    this.parseFileRecursively(fileLinesSet, mode, callback);
-  }
-
-  /**
-   * Parse a file chunkwise.
-   * @param fileLinesSet The set of chunkified file lines.
-   * @param mode The mode (first, second, third).
-   * @param callback The post-parsing callback.
-   */
-  private parseFileRecursively(
-      fileLinesSet: FileLine[][], mode: number, callback: () => void) {
-    const filesLines: FileLine[]|undefined = fileLinesSet.pop();
-
-    if (filesLines === undefined) {
+    if (!fileLines) {
       throw new Error('Failed to parse file lines');
     }
 
-    for (const fileLine of filesLines) {
+    for (const fileLine of fileLines) {
       this.processLine(fileLine.line, fileLine.op, fileLine.args, mode);
     }
 
-    if (fileLinesSet.length) {
-      this.parseFileRecursively(fileLinesSet, mode, callback);
+    if (mode === ModeEnum.FIRST) {
+      this.totalTime = this.timestamp + 1;
     } else {
-      if (mode === ModeEnum.FIRST) {
-        this.totalTime = this.timestamp + 1;
-      } else {
-        this.handleTimestamp(this.totalTime);
-      }
-      callback();
+      this.handleTimestamp(this.totalTime);
     }
   }
 
@@ -439,7 +482,7 @@ export class Parser {
           fileVersion = parseInt(args[1], 16);
         }
 
-        if (this.config.supportedFileVersions.indexOf(fileVersion) === -1) {
+        if (this.supportedFileVersions.indexOf(fileVersion) === -1) {
           throw new Error(
               `Heaptrack file version not supported: ${fileVersion}`);
         }
@@ -485,8 +528,8 @@ export class Parser {
         const theString: string = line.substr(2);
         this.strings.push(theString);
 
-        const newIndex = this.newStrings.indexOf(theString);
-        const stopIndex = this.stopStrings.indexOf(theString);
+        const newIndex: number = this.newStrings.indexOf(theString);
+        const stopIndex: number = this.stopStrings.indexOf(theString);
 
         if (newIndex > -1) {
           this.newStrIndices.push(this.strings.length);
@@ -884,9 +927,7 @@ export class Parser {
       const frame: Frame = instructionPointer.frame;
 
       if (frame.functionIndex !== null) {  // ATTN check this logic
-        const functionName: string = frame.functionIndex < this.strings.length ?
-            this.stringify(frame.functionIndex) :
-            '';
+        const functionName: string = this.stringify(frame.functionIndex);
         chart.labels.set(i + 1, functionName);
       }
     }
@@ -917,7 +958,7 @@ export class Parser {
     };
 
     const topRows: RowData[] = [];
-    let symbolRecursionGuard: Symbol[] = [];
+    let symbolRecursionGuard: string[] = [];
 
     const addRow = (rows: RowData[], location: Location, cost: Allocation):
         RowData[] => {
@@ -979,7 +1020,7 @@ export class Parser {
 
         if (ip.frame.functionIndex === null) {
           break;  // throw new Error('Failed to find frame function index');
-                  // // ATTN check this logic
+                  // ATTN check this logic
         }
 
         if (this.stopIndices.indexOf(ip.frame.functionIndex) > -1) {
@@ -1021,9 +1062,11 @@ export class Parser {
    * @param callerCalleeResult The caller-callee result.
    */
   private addCallerCalleeEvent(
-      location: Location, cost: AllocationData, recursionGuard: Symbol[],
+      location: Location, cost: AllocationData, recursionGuard: string[],
       callerCalleeResult: CallerCalleeResults): void {
-    const index: number = recursionGuard.indexOf(location.symbol);
+    const index: number = recursionGuard.indexOf(
+        location.symbol.path + ' | ' + location.symbol.binary + ' | ' +
+        location.symbol.symbol);
     if (index > -1) {
       return;
     }
@@ -1072,7 +1115,9 @@ export class Parser {
       locationCost.selfCost.temporary += cost.temporary;
     }
 
-    recursionGuard.push(location.symbol);
+    recursionGuard.push(
+        location.symbol.path + ' | ' + location.symbol.binary + ' | ' +
+        location.symbol.symbol);
   }
 
   /**

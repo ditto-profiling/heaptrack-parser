@@ -11,14 +11,19 @@ describe('Test', () => {
     const compressedData: Buffer = readFileSync('./test/data/data_1.gz');
     const fileText: Buffer = gunzipSync(compressedData);
     const fileLines: string[] = fileText.toString().split(/\r?\n/);
-    const config: Config = defaultConfig;
-    config.chunkCallback = (callback: () => void) => setTimeout(callback, 0);
-    const parser = new Parser(config);
+    const parser = new Parser();
     parser.parse(fileLines);
 
     parser.consumedChart$.subscribe(chart => {
       if (!chart) return;
       console.log(chart.rows.length);
+
+      chart.labels.forEach((value: string, key: number) => {
+        if (value === '__libc_start_main') {
+          console.log('**************   ERROR   ***************');
+        }
+      });
+
       done();
     });
   });
